@@ -45,8 +45,6 @@ python generate_book.py
 
  ## **Some Notes** ##
 
-The book will be created in the 'Books' folder and will be 1 big markdown file. I'd recommend converting it to a PDF to be easier to give to AIs. The two, 500 conversation books i created on my data were both about 1000 bullet points and around 40,000 words but were incredibly detailed and helpfulf or context. 
+The book will be created in the 'Books' folder and will just be one big markdown file. I'd recommend converting it to a PDF to be easier to give to AIs though. The two, 500 conversation books i created on my data were both around 1000 bullet points and around 40,000 words but were incredibly detailed and helpfulf for context. 
 
 I hope everybody likes it and finds it as useful as I have!
-
-
