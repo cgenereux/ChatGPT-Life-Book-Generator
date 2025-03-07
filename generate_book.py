@@ -442,16 +442,13 @@ def create_book(api_key, num_convos, base_output_dir, input_file):
         with open(newest_file, 'r', encoding='utf-8') as source:
             with open(book_path, 'w', encoding='utf-8') as dest:
                 dest.write(f"# ChatGPT Life Book #{book_number}\n\n")
-                
-                # Add metadata with conversation titles instead of indices
                 dest.write(f"<!-- Book Metadata: first_convo=\"{first_convo_title}\" last_convo=\"{last_convo_title}\" -->\n\n")
-                
-                # Skip the first two lines (header and blank line) from the source
+                # Skip the header lines (first two lines) from the source
                 lines = source.readlines()[2:]
                 for line in lines:
                     dest.write(f"{line.strip()}\n")
         
-        # Also save a metadata file with the conversation titles
+        # Save a metadata file with conversation titles
         metadata_path = os.path.join(book_folder, "metadata.json")
         with open(metadata_path, 'w') as f:
             json.dump({
@@ -464,233 +461,556 @@ def create_book(api_key, num_convos, base_output_dir, input_file):
         book_created = True
         print(f"Created book with {total_bullets_collected} bullet points")
         print(f"Book saved to: {book_path}")
-
-        return book_created, book_number
-
-def expand_book(api_key, book_number, before_convos, after_convos, base_output_dir, input_file): 
-    """Expands an existing book by adding conversations before and after based on titles."""
-    # Check if the book exists
-    book_folder = os.path.join(base_output_dir, f"Book-{book_number}")
-    if not os.path.exists(book_folder):
-        print(f"Book #{book_number} not found.")
-        return False
-    
-    # Try to load metadata
-    metadata_path = os.path.join(book_folder, "metadata.json")
-    first_conversation = None
-    last_conversation = None
-    
-    if os.path.exists(metadata_path):
-        with open(metadata_path, 'r') as f:
-            metadata = json.load(f)
-        first_conversation = metadata.get("first_conversation")
-        last_conversation = metadata.get("last_conversation")
     else:
-        # Try to extract metadata from book file
-        book_files = glob.glob(os.path.join(book_folder, "*.md"))
-        if not book_files:
-            print(f"No book file found in {book_folder}.")
-            return False
-            
-        book_file = max(book_files, key=os.path.getctime)
-        with open(book_file, 'r') as f:
-            for line in f:
-                if "<!-- Book Metadata:" in line:
-                    # Extract conversation titles from comment
-                    first_match = re.search(r'first_convo="([^"]+)"', line)
-                    last_match = re.search(r'last_convo="([^"]+)"', line)
-                    if first_match and last_match:
-                        first_conversation = first_match.group(1)
-                        last_conversation = last_match.group(1)
-                        break
-            else:
-                print("Could not find book metadata. Cannot expand this book.")
-                return False
-    
-    if not first_conversation or not last_conversation:
-        print("Incomplete metadata. Cannot expand this book.")
-        return False
-    
-    # Load conversations
-    with open(input_file, 'r', encoding='utf-8') as f:
-        conversations = json.load(f)
-    
-    # Find indices of first and last conversations by title
-    first_idx = -1
-    last_idx = -1
+        print("No combined bullet file was found. Book creation failed.")
 
-    for i, convo in enumerate(conversations):
-        title = convo.get('title', 'Untitled')
-        if title == first_conversation and first_idx == -1:
-            first_idx = i
-        if title == last_conversation and first_idx != -1:
-            last_idx = i
-            break
+    # Delete the temporary results folder
+    if os.path.exists(results_folder):
+        try:
+            shutil.rmtree(results_folder)
+            print("Cleaned up temporary files.")
+        except Exception as e:
+            print(f"Error removing results folder: {e}")
 
-    if first_idx == -1 or last_idx == -1:
-        print("Could not find the original conversations in the current file.")
-        print(f"Looking for first conversation: \"{first_conversation}\"")
-        print(f"Looking for last conversation: \"{last_conversation}\"")
-        return False
+    return book_created, book_number
 
-    # When checking for conversation titles, add more checking
-    if first_idx == 0 and first_conversation == conversations[0].get('title', 'Untitled'):
-        print("Note: Your book already starts with the first conversation in your JSON file.")
-        # Check if we need to shift the "original" range as suggested previously
-        if before_convos > 0:
-            print(f"Will treat the first {before_convos} conversations as new content.")
-            new_first_idx = 0
-            first_idx = before_convos  # Shift the "original" range
+def expand_book(api_key, book_number, before_convos, after_convos, base_output_dir, input_file):
+    """
+    Expands an existing book by simply prepending new (newer) bullet points
+    and/or appending older bullet points without splicing the original content.
+    - before_convos: How many older conversations to add (at the end)
+    - after_convos: How many newer conversations to add (at the beginning)
+    Note: Conversations are in reverse chronological order (index 0 = newest)
+    """
+    import os, json, glob, re, shutil, traceback
+    from datetime import datetime
+    
+    try:
+        print(f"Starting expand_book for Book #{book_number}")
+        print(f"Parameters: before_convos={before_convos}, after_convos={after_convos}")
         
-    # For future conversations, add better handling
-    if after_convos > 0:
-        available_after = len(conversations) - 1 - last_idx
-        if available_after == 0:
-            print("Your book already includes the last conversation in your JSON file.")
-            print("No future conversations available to add.")
-        elif available_after < after_convos:
-            print(f"Note: Only {available_after} future conversations are available (you requested {after_convos}).")
-            print(f"Will add all {available_after} available conversations.")
-            after_convos = available_after
+        # Locate book folder.
+        book_folder = os.path.join(base_output_dir, f"Book-{book_number}")
+        print(f"Looking for book folder at {book_folder}")
+        if not os.path.exists(book_folder):
+            print(f"Book #{book_number} not found.")
+            return False
 
-    # Calculate new indices
-    # Change this:
-    # new_first_idx = max(0, first_idx - before_convos)
-    # To this: ALWAYS add more conversations from the beginning
-    new_first_idx = max(0, first_idx - before_convos)
-    if new_first_idx == first_idx and before_convos > 0:
-        # If we're at the first conversation (index 0) and user wants more before,
-        # just start from 0 and include the original range too
-        print(f"Already at the first conversation. Adding the first {before_convos} conversations as new content.")
-        new_first_idx = 0
-        first_idx = before_convos  # Shift the "original" range to start after the new content
-    new_last_idx = min(len(conversations) - 1, last_idx + after_convos)
-    
-    # Get titles of new first and last conversations
-    new_first_title = conversations[new_first_idx].get('title', 'Untitled')
-    new_last_title = conversations[new_last_idx].get('title', 'Untitled')
-    
-    # Create a results folder for temporary files
-    results_folder = os.path.join(book_folder, "Results")
-    os.makedirs(results_folder, exist_ok=True)
-    
-    # Process conversations before current range
-    before_results = 0
-    if before_convos > 0 and new_first_idx < first_idx:
-        actual_before = first_idx - new_first_idx
-        print(f"Processing {actual_before} earlier conversations...")
-        # Adjust worker count for one-sided expansion
-        num_workers = min(before_convos, 10)  # Use up to 10 workers, limited by conversation count
-        if after_convos > 0:  # If we're doing both directions, limit to 5 for each
-            num_workers = min(num_workers, 5)
-        before_results = process_chunk_dynamic(
-            api_key, conversations, new_first_idx, actual_before,
-            results_folder, num_workers, book_number
-        )
-
-    # Process conversations after current range
-    after_results = 0
-    if after_convos > 0 and new_last_idx > last_idx:
-        actual_after = new_last_idx - last_idx
-        print(f"Processing {actual_after} later conversations...")
-        # Adjust worker count for one-sided expansion
-        num_workers = min(after_convos, 10)  # Use up to 10 workers, limited by conversation count
-        if before_convos > 0:  # If we're doing both directions, limit to 5 for each
-            num_workers = min(num_workers, 5)
-        after_results = process_chunk_dynamic(
-            api_key, conversations, last_idx + 1, actual_after,
-            results_folder, num_workers, book_number
-    )
-    
-    total_new_bullets = before_results + after_results
-    
-    if total_new_bullets > 0:
-        # Find the original book file (not an expanded version)
-        book_files = glob.glob(os.path.join(book_folder, f"ChatGPT Life Book #{book_number}.md"))
-        if not book_files:
-            # If original not found, try looking for any file
+        # Load metadata (or extract from a book file).
+        metadata_path = os.path.join(book_folder, "metadata.json")
+        print(f"Metadata path: {metadata_path}")
+        
+        current_first, current_last = None, None
+        if os.path.exists(metadata_path):
+            print("Found metadata.json, loading...")
+            with open(metadata_path, 'r') as f:
+                metadata = json.load(f)
+            current_first = metadata.get("first_conversation")
+            current_last = metadata.get("last_conversation")
+            print(f"From metadata.json: first_conversation={current_first}, last_conversation={current_last}")
+        else:
+            print("No metadata.json found, looking for metadata in book files...")
             book_files = glob.glob(os.path.join(book_folder, "*.md"))
             if not book_files:
                 print(f"No book file found in {book_folder}.")
                 return False
+            
+            book_file = max(book_files, key=os.path.getctime)
+            print(f"Using book file: {book_file}")
+            
+            with open(book_file, 'r') as f:
+                for line in f:
+                    if "<!-- Book Metadata:" in line:
+                        print(f"Found metadata line: {line.strip()}")
+                        first_match = re.search(r'first_convo="([^"]+)"', line)
+                        last_match = re.search(r'last_convo="([^"]+)"', line)
+                        if first_match and last_match:
+                            current_first = first_match.group(1)
+                            current_last = last_match.group(1)
+                            print(f"From book file: first_convo={current_first}, last_convo={current_last}")
+                            break
+        
+        if not current_first or not current_last:
+            print("Incomplete metadata. Cannot expand this book.")
+            return False
 
-        # Select the original file or the oldest file if original naming not found        
-        original_book = book_files[0] if len(book_files) == 1 else min(book_files, key=os.path.getctime)
+        print(f"Current book boundaries - newest: \"{current_first}\", oldest: \"{current_last}\"")
         
-        # Read original book content (skipping metadata)
-        with open(original_book, 'r') as f:
-            lines = f.readlines()
-            header_line = lines[0]
-            content_start = 0
-            for i, line in enumerate(lines):
-                if "<!-- Book Metadata:" in line:
-                    content_start = i + 1
-                    break
-            original_content = lines[content_start:]
+        # Calculate file size to estimate conversations
+        file_size = os.path.getsize(input_file)
+        print(f"JSON file size: {file_size/1024/1024:.2f} MB")
         
-        # Find the new combined bullets file
-        combined_files = glob.glob(os.path.join(results_folder, "combined_bullets_*.md"))
-        new_content = []
-        if combined_files:
-            newest_file = max(combined_files, key=os.path.getctime)
-            with open(newest_file, 'r') as f:
-                # Skip the header lines
-                for i, line in enumerate(f):
-                    if i >= 2:  # Skip first two lines
-                        new_content.append(line)
+        # Use a different approach for large files - count conversations more accurately
+        print("Counting total conversations in JSON file...")
+        total_convos = 0
+        with open(input_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                # Count occurrences of "title" - each conversation has one
+                # This is a quick approximation
+                total_convos += line.count('"title":')
         
-        # Create updated book file
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        expanded_book_path = os.path.join(book_folder, f"ChatGPT Life Book #{book_number} (Expanded {timestamp}).md")
-        with open(expanded_book_path, 'w') as f:
-            # Write header
-            f.write(header_line)
-            f.write("\n")
-            # Write updated metadata
-            f.write(f"<!-- Book Metadata: first_convo=\"{new_first_title}\" last_convo=\"{new_last_title}\" -->\n\n")
-            
-            # Write content from before the original range
-            before_content = new_content[:before_results]
-            for line in before_content:
-                f.write(line)
-            
-            # Write original content
-            for line in original_content:
-                f.write(line)
-            
-            # Write content from after the original range
-            after_content = new_content[before_results:]
-            for line in after_content:
-                f.write(line)
+        print(f"Estimated total conversations: {total_convos}")
+        print("Note: This is an approximation based on the file structure")
         
-        # Update metadata file
-        with open(metadata_path, 'w') as f:
-            json.dump({
-                "first_conversation": new_first_title,
-                "last_conversation": new_last_title,
-                "original_first": first_conversation,
-                "original_last": last_conversation,
-                "creation_date": metadata.get("creation_date", ""),
-                "expansion_date": datetime.now().isoformat(),
-                "original_bullets": metadata.get("bullets", 0),
-                "added_bullets": total_new_bullets,
-                "total_bullets": metadata.get("bullets", 0) + total_new_bullets
-            }, f)
+        # For extremely large files, we need a smarter approach to find just the conversations we need
+        # First, preprocess to find the book's current boundaries
+        first_idx = None  # newest conversation
+        last_idx = None   # oldest conversation
         
-        print(f"Added {total_new_bullets} new bullet points to the book")
-        print(f"Expanded book saved to: {expanded_book_path}")
-    else:
-        print("No new bullet points were collected.")
-    
-    # Clean up temporary files
-    if os.path.exists(results_folder):
+        # Create a temporary file to track our findings
+        temp_dir = os.path.join(book_folder, "Temp")
+        os.makedirs(temp_dir, exist_ok=True)
+        boundaries_file = os.path.join(temp_dir, "conversation_boundaries.txt")
+        
+        # First pass - Find just the book boundaries and calculate total conversations
+        # Use a more robust approach
+        print("Searching for book boundaries in JSON file...")
+        idx = 0
+        search_complete = False
+        
+        # Use a line-by-line approach for better memory efficiency
         try:
-            shutil.rmtree(results_folder)
-            print(f"Cleaned up temporary files.")
+            with open(input_file, 'r', encoding='utf-8') as f:
+                in_object = False
+                current_object = ""
+                object_number = 0
+                
+                for line in f:
+                    # Track if we're inside a conversation object
+                    if "{" in line and not in_object:
+                        in_object = True
+                        current_object = line
+                    elif in_object:
+                        current_object += line
+                        
+                        # Check if this is a complete object
+                        if "}" in line:
+                            # Count nested braces to make sure this is actually the end of the object
+                            open_count = current_object.count("{")
+                            close_count = current_object.count("}")
+                            
+                            if open_count == close_count:
+                                # We have a complete object
+                                in_object = False
+                                
+                                # Extract the title
+                                title_match = re.search(r'"title"\s*:\s*"([^"]+)"', current_object)
+                                if title_match:
+                                    title = title_match.group(1)
+                                    
+                                    # Check if this is one of our boundary conversations
+                                    if title == current_first:
+                                        first_idx = object_number
+                                        print(f"Found newest conversation at index {object_number}: \"{title}\"")
+                                    
+                                    if title == current_last:
+                                        last_idx = object_number
+                                        print(f"Found oldest conversation at index {object_number}: \"{title}\"")
+                                    
+                                    # If we found both, we can record them and continue searching
+                                    if first_idx is not None and last_idx is not None and not search_complete:
+                                        search_complete = True
+                                        with open(boundaries_file, 'w') as bf:
+                                            bf.write(f"{first_idx},{last_idx},{object_number}")
+                                
+                                object_number += 1
+                                current_object = ""
+                                
+                                # Print progress for large files
+                                if object_number % 1000 == 0:
+                                    print(f"Processed {object_number} conversations...")
+            
+            # Save the final count if we haven't found both boundaries
+            if not search_complete:
+                with open(boundaries_file, 'w') as bf:
+                    bf.write(f"{first_idx},{last_idx},{object_number}")
+                    
+            total_objects = object_number
+            print(f"Finished scanning. Found {total_objects} total conversations.")
+            
         except Exception as e:
-            print(f"Error removing results folder: {e}")
-    
-    return total_new_bullets > 0
+            print(f"Error scanning JSON file: {e}")
+            traceback.print_exc()
+            return False
+            
+        # Check if we found the boundary conversations
+        if first_idx is None:
+            print(f"Could not find newest conversation \"{current_first}\" in the JSON file.")
+            return False
+        
+        if last_idx is None:
+            print(f"Could not find oldest conversation \"{current_last}\" in the JSON file.")
+            return False
+            
+        print(f"Current book contains conversations from index {first_idx} (newest) to {last_idx} (oldest)")
+        print(f"Total conversations in file: {total_objects}")
+        
+        # Calculate boundaries for expansion
+        new_first_idx = first_idx
+        if after_convos > 0 and first_idx > 0:
+            new_first_idx = max(0, first_idx - after_convos)
+            newer_count = first_idx - new_first_idx
+            if newer_count > 0:
+                print(f"Will include {newer_count} newer conversations (indices {new_first_idx} to {first_idx-1})")
+            else:
+                print("No newer conversations available (already at the beginning of the file)")
+        
+        new_last_idx = last_idx
+        if before_convos > 0:
+            new_last_idx = min(total_objects - 1, last_idx + before_convos)
+            older_count = new_last_idx - last_idx
+            if older_count > 0:
+                print(f"Will include {older_count} older conversations (indices {last_idx+1} to {new_last_idx})")
+            else:
+                print("No older conversations available (already at the end of the file)")
+        
+        # Check if there's anything to expand
+        if new_first_idx == first_idx and new_last_idx == last_idx:
+            print("No new conversations to add - book already contains the requested range.")
+            # Clean up temp directory
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            return False
+
+        # Create temporary results folder.
+        results_folder = os.path.join(book_folder, "Results")
+        os.makedirs(results_folder, exist_ok=True)
+        print(f"Created temporary results folder at {results_folder}")
+        
+        # Process newer conversations if requested and available
+        new_newer_bullets = ""
+        if after_convos > 0 and new_first_idx < first_idx:
+            num_newer = first_idx - new_first_idx
+            print(f"Processing {num_newer} newer conversations...")
+            
+            # Extract newer conversations line by line
+            newer_convos = []
+            try:
+                with open(input_file, 'r', encoding='utf-8') as f:
+                    in_object = False
+                    current_object = ""
+                    object_number = 0
+                    
+                    for line in f:
+                        # Track if we're inside a conversation object
+                        if "{" in line and not in_object:
+                            in_object = True
+                            current_object = line
+                        elif in_object:
+                            current_object += line
+                            
+                            # Check if this is a complete object
+                            if "}" in line:
+                                # Count nested braces to ensure this is the end
+                                open_count = current_object.count("{")
+                                close_count = current_object.count("}")
+                                
+                                if open_count == close_count:
+                                    # Complete object
+                                    in_object = False
+                                    
+                                    # If this is in our newer range, keep it
+                                    if new_first_idx <= object_number < first_idx:
+                                        try:
+                                            convo_obj = json.loads(current_object)
+                                            newer_convos.append(convo_obj)
+                                            title = convo_obj.get('title', 'Untitled')
+                                            print(f"  Extracted newer conversation {object_number}: \"{title}\"")
+                                        except json.JSONDecodeError:
+                                            print(f"  Error parsing conversation {object_number}")
+                                    
+                                    object_number += 1
+                                    
+                                    # If we've gone past the range we need, we can stop
+                                    if object_number >= first_idx:
+                                        break
+                                        
+                                    current_object = ""
+            except Exception as e:
+                print(f"Error extracting newer conversations: {e}")
+                traceback.print_exc()
+            
+            if newer_convos:
+                print(f"Successfully extracted {len(newer_convos)} newer conversations")
+                
+                # Process the newer conversations
+                num_workers = min(len(newer_convos), 10)
+                if before_convos > 0:
+                    num_workers = min(num_workers, 5)
+                
+                print(f"Calling process_chunk_dynamic with num_workers={num_workers}...")
+                try:
+                    process_chunk_dynamic(api_key, newer_convos, 0, len(newer_convos),
+                                        results_folder, num_workers, book_number)
+                    print("process_chunk_dynamic completed successfully for newer conversations")
+                except Exception as e:
+                    print(f"Error in process_chunk_dynamic for newer conversations: {e}")
+                    traceback.print_exc()
+                
+                combined_files = glob.glob(os.path.join(results_folder, "combined_bullets_*.md"))
+                print(f"Found {len(combined_files)} combined files after processing newer conversations")
+                
+                if combined_files:
+                    newer_file = max(combined_files, key=os.path.getctime)
+                    newer_target = os.path.join(results_folder, "newer_bullets.md")
+                    print(f"Renaming {newer_file} to {newer_target}")
+                    os.rename(newer_file, newer_target)
+                    
+                    with open(newer_target, 'r') as f:
+                        lines = f.readlines()
+                    
+                    # Skip header lines if they exist
+                    start_idx = 0
+                    for i, line in enumerate(lines):
+                        if line.strip() == "":
+                            start_idx = i + 1
+                            break
+                    
+                    new_newer_bullets = "".join(lines[start_idx:])
+                    print(f"Extracted {len(new_newer_bullets.splitlines())} new bullet points from newer conversations")
+            else:
+                print("No newer conversations were successfully extracted.")
+        else:
+            print("No newer conversations requested or available for expansion.")
+
+        # Process older conversations if requested and available
+        new_older_bullets = ""
+        if before_convos > 0 and new_last_idx > last_idx:
+            num_older = new_last_idx - last_idx
+            print(f"Processing {num_older} older conversations...")
+            
+            # Extract older conversations line by line
+            older_convos = []
+            try:
+                with open(input_file, 'r', encoding='utf-8') as f:
+                    in_object = False
+                    current_object = ""
+                    object_number = 0
+                    
+                    for line in f:
+                        # Track if we're inside a conversation object
+                        if "{" in line and not in_object:
+                            in_object = True
+                            current_object = line
+                        elif in_object:
+                            current_object += line
+                            
+                            # Check if this is a complete object
+                            if "}" in line:
+                                # Count nested braces to ensure this is the end
+                                open_count = current_object.count("{")
+                                close_count = current_object.count("}")
+                                
+                                if open_count == close_count:
+                                    # Complete object
+                                    in_object = False
+                                    
+                                    # If this is in our older range, keep it
+                                    if last_idx < object_number <= new_last_idx:
+                                        try:
+                                            convo_obj = json.loads(current_object)
+                                            older_convos.append(convo_obj)
+                                            title = convo_obj.get('title', 'Untitled')
+                                            print(f"  Extracted older conversation {object_number}: \"{title}\"")
+                                        except json.JSONDecodeError:
+                                            print(f"  Error parsing conversation {object_number}")
+                                    
+                                    object_number += 1
+                                    
+                                    # If we've gone past the range we need, we can stop
+                                    if object_number > new_last_idx:
+                                        break
+                                        
+                                    current_object = ""
+            except Exception as e:
+                print(f"Error extracting older conversations: {e}")
+                traceback.print_exc()
+            
+            if older_convos:
+                print(f"Successfully extracted {len(older_convos)} older conversations")
+                
+                # Process the older conversations
+                num_workers = min(len(older_convos), 10)
+                if after_convos > 0:
+                    num_workers = min(num_workers, 5)
+                
+                print(f"Calling process_chunk_dynamic with num_workers={num_workers}...")
+                try:
+                    process_chunk_dynamic(api_key, older_convos, 0, len(older_convos),
+                                        results_folder, num_workers, book_number)
+                    print("process_chunk_dynamic completed successfully for older conversations")
+                except Exception as e:
+                    print(f"Error in process_chunk_dynamic for older conversations: {e}")
+                    traceback.print_exc()
+                    if not new_newer_bullets:
+                        return False
+                
+                combined_files = glob.glob(os.path.join(results_folder, "combined_bullets_*.md"))
+                print(f"Found {len(combined_files)} combined files after processing older conversations")
+                
+                if combined_files:
+                    older_file = max(combined_files, key=os.path.getctime)
+                    older_target = os.path.join(results_folder, "older_bullets.md")
+                    print(f"Renaming {older_file} to {older_target}")
+                    os.rename(older_file, older_target)
+                    
+                    with open(older_target, 'r') as f:
+                        lines = f.readlines()
+                    
+                    # Skip header lines if they exist
+                    start_idx = 0
+                    for i, line in enumerate(lines):
+                        if line.strip() == "":
+                            start_idx = i + 1
+                            break
+                    
+                    new_older_bullets = "".join(lines[start_idx:])
+                    print(f"Extracted {len(new_older_bullets.splitlines())} new bullet points from older conversations")
+            else:
+                print("No older conversations were successfully extracted.")
+        else:
+            print("No older conversations requested or available for expansion.")
+
+        if not new_newer_bullets and not new_older_bullets:
+            print("No new bullet points were collected.")
+            # Clean up temp directories
+            shutil.rmtree(results_folder, ignore_errors=True)
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            return False
+
+        total_new = len(new_newer_bullets.splitlines()) + len(new_older_bullets.splitlines())
+        print(f"Collected {total_new} new bullet points.")
+
+        # Open the original book file.
+        print("Looking for original book file...")
+        book_files = glob.glob(os.path.join(book_folder, f"ChatGPT Life Book #{book_number}.md"))
+        if not book_files:
+            book_files = glob.glob(os.path.join(book_folder, "*.md"))
+            if not book_files:
+                print(f"No book file found in {book_folder}.")
+                # Clean up temp directories
+                shutil.rmtree(results_folder, ignore_errors=True)
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                return False
+        
+        original_book = book_files[0] if len(book_files) == 1 else max(book_files, key=os.path.getctime)
+        print(f"Using original book file: {original_book}")
+        
+        # Read the original book content
+        with open(original_book, 'r') as f:
+            book_lines = f.readlines()
+        
+        print(f"Read {len(book_lines)} lines from original book")
+        
+        # Extract header and book content without duplicating header/metadata
+        header_line = book_lines[0].strip() if book_lines else "# ChatGPT Life Book"
+        book_content_body = ""
+        metadata_line_idx = -1
+        
+        # Find the metadata line
+        for i, line in enumerate(book_lines):
+            if "<!-- Book Metadata:" in line:
+                metadata_line_idx = i
+                break
+        
+        # Extract the content after header and metadata
+        if metadata_line_idx != -1 and metadata_line_idx + 2 < len(book_lines):
+            # Skip header, metadata line, and the empty line after it
+            book_content_body = "".join(book_lines[metadata_line_idx + 2:])
+            print(f"Extracted {len(book_content_body.splitlines())} lines of content after metadata line")
+        elif len(book_lines) > 1:
+            # If no metadata found, assume everything after header is content
+            book_content_body = "".join(book_lines[1:])
+            print(f"No metadata line found, extracted {len(book_content_body.splitlines())} lines after header")
+        
+        # Get titles for first and last conversation
+        new_first_title = ""
+        if new_first_idx != first_idx and after_convos > 0:
+            # Get the title from the first newer conversation we processed
+            if newer_convos and len(newer_convos) > 0:
+                new_first_title = newer_convos[0].get('title', 'Untitled')
+        else:
+            new_first_title = current_first
+
+        new_last_title = ""
+        if new_last_idx != last_idx and before_convos > 0:
+            # Get the title from the last older conversation we processed
+            if older_convos and len(older_convos) > 0:
+                new_last_title = older_convos[-1].get('title', 'Untitled')
+        else:
+            new_last_title = current_last
+            
+        print(f"New book boundaries - newest: \"{new_first_title}\", oldest: \"{new_last_title}\"")
+
+        # Build the new expanded book.
+        new_book_content = f"{header_line}\n"
+        new_book_content += f"<!-- Book Metadata: first_convo=\"{new_first_title}\" last_convo=\"{new_last_title}\" -->\n\n"
+        
+        # Add newer bullets at the beginning
+        if new_newer_bullets:
+            print(f"Adding {len(new_newer_bullets.splitlines())} newer bullet points at the beginning")
+            new_book_content += new_newer_bullets
+            if not new_newer_bullets.endswith("\n\n"):
+                new_book_content += "\n\n" if not new_newer_bullets.endswith("\n") else "\n"
+        
+        # Add original content (make sure it doesn't start with a blank line if there are newer bullets)
+        if book_content_body:
+            print(f"Adding {len(book_content_body.splitlines())} lines from original book")
+            if book_content_body.startswith("\n") and new_newer_bullets:
+                book_content_body = book_content_body.lstrip("\n")
+            new_book_content += book_content_body
+        
+        # Make sure there's appropriate spacing before older bullets
+        if not new_book_content.endswith("\n"):
+            new_book_content += "\n"
+        elif not new_book_content.endswith("\n\n") and new_older_bullets:
+            new_book_content += "\n"
+        
+        # Add older bullets at the end
+        if new_older_bullets:
+            print(f"Adding {len(new_older_bullets.splitlines())} older bullet points at the end")
+            new_book_content += new_older_bullets
+        
+        # Ensure the file ends with a newline
+        if not new_book_content.endswith("\n"):
+            new_book_content += "\n"
+
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        expanded_path = os.path.join(book_folder, f"ChatGPT Life Book #{book_number} (Expanded {timestamp}).md")
+        print(f"Writing expanded book to {expanded_path}")
+        
+        try:
+            with open(expanded_path, 'w') as f:
+                f.write(new_book_content)
+            print(f"Successfully saved expanded book: {expanded_path}")
+        except Exception as e:
+            print(f"Error saving expanded book: {e}")
+            traceback.print_exc()
+            # Clean up temp directories
+            shutil.rmtree(results_folder, ignore_errors=True)
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            return False
+
+        # Clean up temporary directories
+        if os.path.exists(results_folder):
+            try:
+                shutil.rmtree(results_folder)
+                print("Cleaned up temporary results folder.")
+            except Exception as e:
+                print(f"Error removing results folder: {e}")
+        
+        if os.path.exists(temp_dir):
+            try:
+                shutil.rmtree(temp_dir)
+                print("Cleaned up temporary directory.")
+            except Exception as e:
+                print(f"Error removing temp directory: {e}")
+
+        print("Expansion completed successfully.")
+        return True
+    except Exception as e:
+        print(f"Unhandled exception in expand_book: {e}")
+        traceback.print_exc()
+        return False
 
 def list_books(base_output_dir):
     """Lists all books that have been created."""
@@ -729,7 +1049,8 @@ def show_help():
     print("\n" + '='*19 + " Available Commands " + '='*19)
     print("/help                      - Shows all available commands")
     print("/create book <size>        - Creates a new book using <size> recent conversations")
-    print("/expand book <book #> <past> <future> - Adds more conversations from the past or future to your existing book")
+    # Adds more conversations from the past or future to your existing book
+    print("/expand book <book #> <past> <future> - **This feature is currently broken but the ETA on it is a few days**") 
     print("/list books                - Shows all the books you've created")
     print("/estimate <size>           - Estimates the cost for analyzing <size> conversations")
     print("/quit                      - Exits the program")
@@ -754,7 +1075,7 @@ def estimate_cost(size):
 
 def main():
     # Configuration
-    INPUT_FILE = "conversations.json"
+    INPUT_FILE = "conversations.json" 
     BASE_OUTPUT_DIR = "Books"
     
     # Check if conversations file exists
@@ -783,7 +1104,7 @@ def main():
     if not api_key:
         api_key = input("Enter your Anthropic API key: ").strip()
         # Save API key for future use
-        save_key = input("Save API key for future use? (y/n): ").strip().lower()
+        save_key = input("Save API key locally for future use? (y/n): ").strip().lower()
         if save_key in ['y', 'yes']:
             with open(api_key_file, 'w') as f:
                 f.write(api_key)
