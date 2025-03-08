@@ -56,4 +56,4 @@ When asked, enter:
 
 You'll find the finished Context Book as a markdown file (`.md`) in the **Books** folder but converting it to a PDF can be convenient.
 
-I hope you all find it useful!
+I hope you find it useful!
