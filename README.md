@@ -30,8 +30,8 @@ This tool turns hundreds  of your past ChatGPT conversations into a detailed, pe
 
 #### Quick setup:
 
-- Clone or download the repo
-- Open a terminal/command line and run:
+- Clone or download the project 
+- Open your editor or command line and run:
 
 ```bash
 pip install anthropic
