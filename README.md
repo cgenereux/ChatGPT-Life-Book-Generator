@@ -14,7 +14,7 @@ This tool turns hundreds  of your past ChatGPT conversations into a detailed, pe
 
 ### **Step 1: Extract your ChatGPT Data**
 
-*If you have 8000+ conversations like me, it might take longer to export or need a second try*
+(If you have 8000+ conversations like me, it might take longer to export or require a second try)
 
 - Click your profile icon in the top right corner
 - Go to **Settings → Data controls → Export data**
