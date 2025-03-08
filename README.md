@@ -6,8 +6,8 @@ This tool turns hundreds  of your past ChatGPT conversations into a detailed, pe
 
 ## **Quick Info**
 
-- ⚡ **Fast Setup:** Takes 5-10 minutes
-- 📂 **Fully Open Source:** Just download the project
+- ⚡ **Fast Setup:** Takes 5-10 minutes to set up
+- 📂 **Fully Open Source:** No monetization 
 - 📦 **Handles Big Exports**: Can process thousands of conversations
 
 ## **How to Use It**
