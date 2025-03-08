@@ -50,7 +50,7 @@ python generate_book.py
 When asked, enter:
 
 - Your Anthropic API key
-- How many recent convos you want to use
+- How many recent conversations you'd like to use 
 
 ## **Where’s the Book?**
 
