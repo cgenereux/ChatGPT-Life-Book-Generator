@@ -2,7 +2,7 @@
 
 ## **Abstract**
 
-Turn hundreds of your past ChatGPT conversations into a detailed, personalized bullet-point book. This gives ChatGPT a significantly more powerful memory, helping it understand and assist you better. 500 conversations typically cost about $3 in API credits and takes roughly 18 minutes.
+Turn hundreds of your past ChatGPT conversations into a detailed, personalized bullet-point book. This gives ChatGPT a significantly more powerful memory without killing your context window buy efficiently distilling conversations and lets AI know assist you better. A 500 conversation book roughly costs about $3 in API credits and should take around 18 minutes.
 
 ## **Quick Info**
 
