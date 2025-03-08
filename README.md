@@ -21,7 +21,7 @@ This tool turns hundreds  of your past ChatGPT conversations into a detailed, pe
 - Wait for your data export and download it
 - Unzip the downloaded file and grab the **`conversations.json`**
 
-### **Step 2: Install the Stuff**
+### **Step 2: Installation**
 
 #### What you’ll need:
 
