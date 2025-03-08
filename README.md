@@ -32,19 +32,19 @@ Prerequisites
 Installation Steps
  * Clone or download this repository
  * Install required dependencies:
- * pip install anthropic
- * Place your ChatGPT conversation export file (named conversations.json) in the same folder as the script
+ * Run 'pip install anthropic' in your editor or command line
+ * Go to your email and download your ChatGPT data export
+ * Place the 'conversations.json' file in the same folder as the script
 
 # 3. Usage
 
  * Run the script:
 python generate_book.py
  * Enter your Anthropic API key when prompted
- * Enter the number of conversations you'd like to use for your book (It'll use the most recent)
- * Answer yes or no to proceed with the creation of your book
+ * Enter the number of recent conversations you'd like to use to create your book 
 
  ## **Some Notes** ##
 
-The book will be created in the 'Books' folder and will just be one big markdown file. I'd recommend converting it to a PDF to be easier to give to AIs though. The two, 500 conversation books i created on my data were both around 1000 bullet points and around 40,000 words but were incredibly detailed and helpfulf for context. 
+Your completed Context Book will be saved as a markdown file in the 'Books' folder. For easier sharing with LLMs, consider converting it to PDF format. My 500 conversation book ended up being about 1,000 bullets and 15,000 words.
 
 I hope everybody likes it and finds it as useful as I have!
