@@ -50,9 +50,9 @@ python generate_book.py
 When asked, enter:
 
 - Your Anthropic API key
-- How many recent conversations you'd like to use 
+- How many recent conversations you'd like to use (The sweet spot for me is 300-500)
 
-## **Where’s the Book?**
+## **Final notes**
 
 You'll find the finished Context Book as a markdown file (`.md`) in the **Books** folder but converting it to a PDF can be convenient.
 
