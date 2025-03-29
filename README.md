@@ -50,7 +50,7 @@ python generate_book.py
 When asked, enter:
 
 - Your Anthropic API key
-- How many recent conversations you'd like to use (The sweet spot for me is 300-500)
+- How many recent conversations you'd like to use (I think the sweet spot is 300-500)
 
 ## **Final notes**
 
