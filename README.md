@@ -2,7 +2,7 @@
 
 ## **Abstract**
 
-Turn hundreds of your past ChatGPT conversations into a detailed, personalized bullet-point book. This gives ChatGPT enhanced memory by efficiently distilling past conversations, enabling it to better understand and assist you without overwhelming its context window. A 500-conversation book costs roughly $3 in API credits and should take about 18 minutes. If you need any help with the instillation, I'd recommend asking ChatGPT!
+Turn hundreds of your past ChatGPT conversations into a detailed, personalized bullet-point book. This gives ChatGPT enhanced memory by efficiently distilling past conversations, enabling it to better understand and assist you without overwhelming its context window. A 500-conversation book costs roughly $3 in API credits and should take about 18 minutes. If you need any help with the installation, I'd recommend asking ChatGPT!
 
 ## **Quick Info**
 
@@ -21,7 +21,7 @@ Turn hundreds of your past ChatGPT conversations into a detailed, personalized b
 - Wait for your data export and download it
 - Unzip the downloaded file and grab the **`conversations.json`**
 
-### **Step 2: Installation**
+### **Step 2: installation**
 
 #### What you’ll need:
 
