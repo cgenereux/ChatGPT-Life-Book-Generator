@@ -459,7 +459,7 @@ def create_book(api_key, num_convos, base_output_dir, input_file):
             }, f)
 
         book_created = True
-        print(f"Created book with {total_bullets_collected} bullet points")
+        print(f"Created book with {total_bullets_collected} bullet points.")
         print(f"Book saved to: {book_path}")
     else:
         print("No combined bullet file was found. Book creation failed.")
@@ -468,11 +468,35 @@ def create_book(api_key, num_convos, base_output_dir, input_file):
     if os.path.exists(results_folder):
         try:
             shutil.rmtree(results_folder)
-            print("Cleaned up temporary files.")
+            # print("Cleaned up temporary files.")
         except Exception as e:
             print(f"Error removing results folder: {e}")
 
     return book_created, book_number
+
+def index_convo(input_file, title_to_find=None):
+    """If title_to_find is provided, prints the index of the matching conversation.
+    Otherwise, lists all conversation indices and titles."""
+    try:
+        with open(input_file, 'r', encoding='utf-8') as f:
+            conversations = json.load(f)
+    except Exception as e:
+        print(f"Error loading conversations: {e}")
+        return
+
+    if title_to_find:
+        for idx, convo in enumerate(conversations):
+            title = convo.get('title', 'Untitled')
+            if title.lower() == title_to_find.lower():
+                print(f"Conversation '{title_to_find}' found at index {idx}")
+                return idx
+        print(f"Conversation '{title_to_find}' not found.")
+    else:
+        print("\n=== Conversation Index ===")
+        for idx, convo in enumerate(conversations):
+            title = convo.get('title', 'Untitled')
+            print(f"{idx}: {title}")
+        print(f"Total Conversations: {len(conversations)}\n")
 
 def expand_book(api_key, book_number, before_convos, after_convos, base_output_dir, input_file):
     """
@@ -1052,6 +1076,7 @@ def show_help():
     # Adds more conversations from the past or future to your existing book
     print("/expand book <book #> <past> <future> - **This feature is currently broken but the ETA on it is a few days**") 
     print("/list books                - Shows all the books you've created")
+    print("/index convo <name of conversation> - Returns the index of a specific conversation")
     print("/estimate <size>           - Estimates the cost for analyzing <size> conversations")
     print("/quit                      - Exits the program")
     print("============================" + '='*30 + "\n")
@@ -1130,6 +1155,15 @@ def main():
                 
             elif command == "/list books":
                 list_books(BASE_OUTPUT_DIR)
+
+            elif command.startswith("/index convo"):
+                parts = command.split(" ", 2)  # split into at most 3 parts
+                if len(parts) == 3:
+                    title_to_find = parts[2].strip()
+                    index_convo(INPUT_FILE, title_to_find)
+                else:
+                    index_convo(INPUT_FILE)
+
                 
             elif command.startswith("/create book "):
                 try:
