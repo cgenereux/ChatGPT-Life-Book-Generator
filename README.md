@@ -2,7 +2,7 @@
 
 ## **Abstract**
 
-Turn hundreds of past ChatGPT conversations into a detailed, personalized bullet-point book.
+Turn hundreds of past ChatGPT conversations into a detailed, bullet-point book to unlock a more powerful memory for ChatGPT.
 
 ## **How to Use It**
 
